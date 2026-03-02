@@ -204,7 +204,7 @@ if (rule.canDischarge(patientId)) {
 
 | Convention | Rule |
 |---|---|
-| **Namespace prefix** | All custom artefacts must begin with `Z_` (e.g., `Z_HOSPITAL`). |
+| **Namespace prefix** | All custom artifacts must begin with `Z_` (e.g., `Z_HOSPITAL`). |
 | **No core modification** | Never alter classes or tables outside your `Z_` namespace. |
 | **Auditable** | Extensions participate in the same audit trail as core actions via `AuditableAction`. |
 | **Tenant-scoped** | Custom entities must extend `TenantAware` to inherit tenant isolation. |
