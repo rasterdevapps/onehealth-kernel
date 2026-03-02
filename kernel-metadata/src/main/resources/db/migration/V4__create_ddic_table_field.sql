@@ -10,5 +10,6 @@ CREATE TABLE kern_ddic_table_field (
     description TEXT
 );
 
+ALTER TABLE kern_ddic_table_field ADD CONSTRAINT uq_kern_ddic_table_field_tenant_table_name UNIQUE (tenant_id, table_id, field_name);
 CREATE INDEX idx_kern_ddic_table_field_tenant_id ON kern_ddic_table_field(tenant_id);
 CREATE INDEX idx_kern_ddic_table_field_table_id ON kern_ddic_table_field(table_id);

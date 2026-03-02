@@ -11,7 +11,7 @@ import java.util.UUID;
 @Repository
 public interface DdicTableRepository extends JpaRepository<DdicTable, UUID> {
 
-    Optional<DdicTable> findByTableName(String tableName);
+    Optional<DdicTable> findByTenantIdAndTableName(String tenantId, String tableName);
 
     List<DdicTable> findByTenantId(String tenantId);
 }

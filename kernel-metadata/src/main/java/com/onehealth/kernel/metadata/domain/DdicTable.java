@@ -24,7 +24,7 @@ public class DdicTable extends TenantAware {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(name = "table_name", unique = true, nullable = false)
+    @Column(name = "table_name", nullable = false)
     private String tableName;
 
     @Column(name = "description")

@@ -11,7 +11,7 @@ import java.util.UUID;
 @Repository
 public interface DdicDomainRepository extends JpaRepository<DdicDomain, UUID> {
 
-    Optional<DdicDomain> findByDomainName(String domainName);
+    Optional<DdicDomain> findByTenantIdAndDomainName(String tenantId, String domainName);
 
     List<DdicDomain> findByTenantId(String tenantId);
 

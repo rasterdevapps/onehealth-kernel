@@ -20,7 +20,7 @@ public class DdicDomain extends TenantAware {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(name = "domain_name", unique = true, nullable = false)
+    @Column(name = "domain_name", nullable = false)
     private String domainName;
 
     @Column(name = "data_type", nullable = false)

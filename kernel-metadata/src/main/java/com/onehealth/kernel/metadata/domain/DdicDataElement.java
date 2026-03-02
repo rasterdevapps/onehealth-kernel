@@ -22,7 +22,7 @@ public class DdicDataElement extends TenantAware {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(name = "element_name", unique = true, nullable = false)
+    @Column(name = "element_name", nullable = false)
     private String elementName;
 
     @ManyToOne
