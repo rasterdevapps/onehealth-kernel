@@ -7,12 +7,13 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "kern_ddic_domain")
+@Table(name = "kern_ddic_domain", uniqueConstraints = @UniqueConstraint(columnNames = {"tenant_id", "domain_name"}))
 public class DdicDomain extends TenantAware {
 
     @Id

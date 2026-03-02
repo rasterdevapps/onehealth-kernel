@@ -9,6 +9,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -16,7 +17,7 @@ import java.util.List;
 import java.util.UUID;
 
 @Entity
-@Table(name = "kern_ddic_table")
+@Table(name = "kern_ddic_table", uniqueConstraints = @UniqueConstraint(columnNames = {"tenant_id", "table_name"}))
 public class DdicTable extends TenantAware {
 
     @Id
