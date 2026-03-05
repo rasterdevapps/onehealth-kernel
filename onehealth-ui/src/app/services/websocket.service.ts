@@ -21,7 +21,9 @@ export class WebSocketService implements OnDestroy {
   readonly messages$: Observable<LabResultNotification> = this.messageSubject.asObservable();
 
   connect(url: string): void {
-    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+    if (this.socket &&
+        (this.socket.readyState === WebSocket.OPEN ||
+         this.socket.readyState === WebSocket.CONNECTING)) {
       return;
     }
     this.socket = new WebSocket(url);

@@ -31,9 +31,9 @@ import java.util.Map;
 @RequestMapping("/auth")
 public class TokenController {
 
-    private static final long TOKEN_VALIDITY_MS = 3_600_000L; // 1 hour
+    private static final List<String> DEFAULT_ROLES = List.of("USER");
 
-    @PostMapping("/token")
+    private static final long TOKEN_VALIDITY_MS = 3_600_000L; // 1 hour
     public ResponseEntity<Map<String, String>> generateToken(@RequestBody TokenRequest request) {
         try {
             RSAPrivateKey privateKey = loadRsaPrivateKey();
@@ -43,7 +43,7 @@ public class TokenController {
                     .subject(request.username())
                     .issuer("onehealth-kernel")
                     .claim("tenant_id", request.tenantId())
-                    .claim("roles", request.roles() != null ? request.roles() : List.of("USER"))
+                    .claim("roles", request.roles() != null ? request.roles() : DEFAULT_ROLES)
                     .issueTime(new Date())
                     .expirationTime(new Date(System.currentTimeMillis() + TOKEN_VALIDITY_MS))
                     .build();

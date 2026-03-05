@@ -29,7 +29,7 @@ public class LabResultEventConsumer {
             String json = objectMapper.writeValueAsString(event);
             webSocketHandler.broadcast(json);
         } catch (Exception e) {
-            log.error("Failed to broadcast lab result event: {}", e.getMessage());
+            log.error("Failed to broadcast lab result event", e);
         }
     }
 }

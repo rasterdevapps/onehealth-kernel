@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
 import { ApiService, LabOrderDTO } from '../../services/api.service';
 import { WebSocketService, LabResultNotification } from '../../services/websocket.service';
+import { environment } from '../../../environments/environment';
 
 @Component({
   selector: 'app-lis-view',
@@ -150,7 +151,7 @@ export class LisViewComponent implements OnInit, OnDestroy {
   wsConnected = false;
 
   private wsSub: Subscription | null = null;
-  private readonly wsUrl = 'ws://localhost:8080/ws/lab-results';
+  private readonly wsUrl = `${environment.gatewayWsUrl}/ws/lab-results`;
 
   constructor(private api: ApiService, private wsService: WebSocketService) {}
 

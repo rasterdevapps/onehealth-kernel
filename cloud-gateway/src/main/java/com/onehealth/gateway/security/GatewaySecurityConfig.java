@@ -25,6 +25,10 @@ public class GatewaySecurityConfig {
     @Bean
     public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
         http
+                // CSRF protection is disabled intentionally: this is a stateless API gateway
+                // using JWT Bearer tokens (Authorization header). CSRF attacks exploit
+                // cookie-based authentication; they do not apply here because browsers
+                // do not automatically attach the Authorization header to cross-site requests.
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .authorizeExchange(auth -> auth
                         .pathMatchers("/auth/token").permitAll()
