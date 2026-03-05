@@ -22,6 +22,12 @@ public class RabbitMQConfig {
     @Value("${lis.rabbitmq.routing-key}")
     private String routingKey;
 
+    @Value("${lis.rabbitmq.result-routing-key}")
+    private String resultRoutingKey;
+
+    @Value("${lis.rabbitmq.result-queue}")
+    private String resultQueue;
+
     @Bean
     public TopicExchange lisExchange() {
         return new TopicExchange(exchange);
@@ -35,6 +41,16 @@ public class RabbitMQConfig {
     @Bean
     public Binding labOrderBinding(Queue labOrderCreatedQueue, TopicExchange lisExchange) {
         return BindingBuilder.bind(labOrderCreatedQueue).to(lisExchange).with(routingKey);
+    }
+
+    @Bean
+    public Queue labResultReadyQueue() {
+        return new Queue(resultQueue, true);
+    }
+
+    @Bean
+    public Binding labResultBinding(Queue labResultReadyQueue, TopicExchange lisExchange) {
+        return BindingBuilder.bind(labResultReadyQueue).to(lisExchange).with(resultRoutingKey);
     }
 
     @Bean

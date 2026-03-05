@@ -3,6 +3,7 @@ package com.onehealth.lis.service;
 import com.onehealth.erp.common.audit.AuditLogger;
 import com.onehealth.erp.common.dto.LabOrderDTO;
 import com.onehealth.erp.common.event.LabOrderCreatedEvent;
+import com.onehealth.erp.common.event.LabResultReadyEvent;
 import com.onehealth.kernel.auth.TenantContext;
 import com.onehealth.lis.domain.LabOrder;
 import com.onehealth.lis.repository.LabOrderRepository;
@@ -31,6 +32,9 @@ public class LabOrderService {
 
     @Value("${lis.rabbitmq.routing-key}")
     private String routingKey;
+
+    @Value("${lis.rabbitmq.result-routing-key}")
+    private String resultRoutingKey;
 
     public LabOrderService(LabOrderRepository labOrderRepository,
                            RabbitTemplate rabbitTemplate,
@@ -72,6 +76,16 @@ public class LabOrderService {
         order.setCompletedAt(Instant.now());
 
         LabOrder saved = labOrderRepository.save(order);
+
+        LabResultReadyEvent resultEvent = new LabResultReadyEvent(
+                saved.getId(),
+                saved.getPatientId(),
+                saved.getTenantId(),
+                saved.getTestType(),
+                saved.getResult()
+        );
+        rabbitTemplate.convertAndSend(exchange, resultRoutingKey, resultEvent);
+        log.info("Published LabResultReady event for order {}", saved.getId());
 
         auditLogger.log("LAB_TEST_EXECUTED", "LabOrder", saved.getId().toString(), "system");
 

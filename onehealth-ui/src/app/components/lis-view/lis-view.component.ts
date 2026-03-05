@@ -1,6 +1,9 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { Subscription } from 'rxjs';
 import { ApiService, LabOrderDTO } from '../../services/api.service';
+import { WebSocketService, LabResultNotification } from '../../services/websocket.service';
+import { environment } from '../../../environments/environment';
 
 @Component({
   selector: 'app-lis-view',
@@ -8,6 +11,17 @@ import { ApiService, LabOrderDTO } from '../../services/api.service';
   imports: [CommonModule],
   template: `
     <h2>LIS — Lab Orders</h2>
+
+    <div *ngIf="notifications.length > 0" class="notification-panel">
+      <h3>🔔 Real-Time Lab Result Notifications</h3>
+      <div *ngFor="let n of notifications" class="notification-item">
+        <strong>{{ n.testType }}</strong> — {{ n.result }}
+        <span class="note">(Order: {{ n.orderId | slice:0:8 }}... | Completed: {{ n.completedAt | date:'HH:mm:ss' }})</span>
+        <span class="ws-badge">LIVE</span>
+      </div>
+    </div>
+    <div *ngIf="wsStatus" class="ws-status" [class.connected]="wsConnected">{{ wsStatus }}</div>
+
     <button class="btn" (click)="loadOrders()">Refresh</button>
     <table *ngIf="orders.length > 0" class="data-table">
       <thead>
@@ -45,6 +59,44 @@ import { ApiService, LabOrderDTO } from '../../services/api.service';
   `,
   styles: [`
     h2 { color: #1a237e; }
+    .notification-panel {
+      background: #e8f5e9;
+      border: 1px solid #a5d6a7;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .notification-panel h3 { color: #2e7d32; margin: 0 0 12px 0; font-size: 15px; }
+    .notification-item {
+      padding: 8px 0;
+      border-bottom: 1px solid #c8e6c9;
+      font-size: 14px;
+      color: #1b5e20;
+    }
+    .notification-item:last-child { border-bottom: none; }
+    .note { color: #555; margin-left: 8px; font-size: 12px; }
+    .ws-badge {
+      display: inline-block;
+      background: #4caf50;
+      color: white;
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-size: 10px;
+      font-weight: 700;
+      margin-left: 8px;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .ws-status {
+      font-size: 12px;
+      color: #e65100;
+      margin-bottom: 8px;
+      padding: 4px 8px;
+      background: #fff3e0;
+      border-radius: 4px;
+      display: inline-block;
+    }
+    .ws-status.connected { color: #2e7d32; background: #e8f5e9; }
     .btn {
       padding: 8px 20px;
       background: #1a237e;
@@ -89,16 +141,43 @@ import { ApiService, LabOrderDTO } from '../../services/api.service';
     .message.error { background: #ffebee; color: #c62828; }
   `]
 })
-export class LisViewComponent implements OnInit {
+export class LisViewComponent implements OnInit, OnDestroy {
 
   orders: LabOrderDTO[] = [];
+  notifications: LabResultNotification[] = [];
   message = '';
   isError = false;
+  wsStatus = 'Connecting to real-time updates...';
+  wsConnected = false;
 
-  constructor(private api: ApiService) {}
+  private wsSub: Subscription | null = null;
+  private readonly wsUrl = `${environment.gatewayWsUrl}/ws/lab-results`;
+
+  constructor(private api: ApiService, private wsService: WebSocketService) {}
 
   ngOnInit(): void {
     this.loadOrders();
+    this.connectWebSocket();
+  }
+
+  ngOnDestroy(): void {
+    this.wsSub?.unsubscribe();
+    this.wsService.disconnect();
+  }
+
+  private connectWebSocket(): void {
+    try {
+      this.wsService.connect(this.wsUrl);
+      this.wsStatus = '⚡ Connected — receiving real-time lab results';
+      this.wsConnected = true;
+      this.wsSub = this.wsService.messages$.subscribe((notification) => {
+        this.notifications.unshift(notification);
+        this.loadOrders();
+      });
+    } catch (e) {
+      this.wsStatus = 'Real-time updates unavailable (WebSocket not connected)';
+      this.wsConnected = false;
+    }
   }
 
   loadOrders(): void {
@@ -114,7 +193,7 @@ export class LisViewComponent implements OnInit {
   executeTest(orderId: string): void {
     this.api.executeLabTest(orderId).subscribe({
       next: () => {
-        this.message = 'Lab test executed successfully!';
+        this.message = 'Lab test executed — real-time notification incoming via WebSocket!';
         this.isError = false;
         this.loadOrders();
       },

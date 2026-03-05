@@ -4,6 +4,11 @@ server:
 spring:
   application:
     name: cloud-gateway
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          public-key-location: classpath:keys/public.pem
   cloud:
     gateway:
       routes:
@@ -19,6 +24,10 @@ spring:
           uri: ${LIS_URI:http://localhost:8083}
           predicates:
             - Path=/api/lab-orders/**
+        - id: service-emr-ws
+          uri: ${EMR_WS_URI:ws://localhost:8082}
+          predicates:
+            - Path=/ws/**
       default-filters:
         - PreserveHostHeader
 
