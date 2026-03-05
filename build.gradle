@@ -25,6 +25,10 @@ subprojects {
         options.encoding = 'UTF-8'
     }
 
+    dependencies {
+        testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    }
+
     test {
         useJUnitPlatform()
     }

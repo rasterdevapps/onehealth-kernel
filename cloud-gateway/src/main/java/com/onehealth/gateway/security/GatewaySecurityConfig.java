@@ -1,16 +1,15 @@
-package com.onehealth.kernel.auth;
+package com.onehealth.gateway.security;
 
-import com.nimbusds.jose.jwk.RSAKey;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
+import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
-import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
-import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
+import org.springframework.security.oauth2.jwt.NimbusReactiveJwtDecoder;
+import org.springframework.security.web.server.SecurityWebFilterChain;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -20,31 +19,30 @@ import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 
 @Configuration
-@EnableWebSecurity
-public class SecurityConfig {
+@EnableWebFluxSecurity
+public class GatewaySecurityConfig {
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
         http
-                .csrf(csrf -> csrf.disable())
-                .sessionManagement(session ->
-                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/ws/**", "/actuator/**").permitAll()
-                        .anyRequest().authenticated())
+                .csrf(ServerHttpSecurity.CsrfSpec::disable)
+                .authorizeExchange(auth -> auth
+                        .pathMatchers("/auth/token").permitAll()
+                        .pathMatchers("/actuator/**").permitAll()
+                        .pathMatchers("/ws/**").permitAll()
+                        .anyExchange().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
-                        .jwt(jwt -> jwt.jwtAuthenticationConverter(new JwtTenantConverter())))
-                .addFilterAfter(new TenantFilter(), BearerTokenAuthenticationFilter.class);
+                        .jwt(jwt -> jwt.jwtDecoder(reactiveJwtDecoder())));
         return http.build();
     }
 
     @Bean
-    public JwtDecoder jwtDecoder() {
+    public ReactiveJwtDecoder reactiveJwtDecoder() {
         try {
             RSAPublicKey publicKey = loadRsaPublicKey();
-            return NimbusJwtDecoder.withPublicKey(publicKey).build();
+            return NimbusReactiveJwtDecoder.withPublicKey(publicKey).build();
         } catch (Exception e) {
-            throw new IllegalStateException("Failed to load RSA public key for JWT validation", e);
+            throw new IllegalStateException("Failed to load RSA public key for gateway JWT validation", e);
         }
     }
 
