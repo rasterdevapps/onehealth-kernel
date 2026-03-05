@@ -1,2 +1,2 @@
 rootProject.name = 'onehealth-kernel'
-include 'kernel-metadata', 'kernel-auth', 'kernel-api', 'erp-common-lib'
+include 'kernel-metadata', 'kernel-auth', 'kernel-api', 'erp-common-lib', 'cloud-gateway'
