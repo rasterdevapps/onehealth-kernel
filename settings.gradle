@@ -1,2 +1,16 @@
 rootProject.name = 'onehealth-kernel'
-include 'kernel-metadata', 'kernel-auth', 'kernel-api', 'erp-common-lib', 'cloud-gateway', 'service-his', 'service-emr', 'service-lis'
+
+// Shared Kernel Libraries
+include 'kernel-api'
+include 'kernel-auth'
+include 'kernel-metadata'
+
+// Core Kernel Microservices
+include 'identity-service'
+include 'authorization-service'
+include 'tenant-service'
+include 'config-service'
+include 'audit-service'
+
+// API Gateway
+include 'cloud-gateway'

@@ -1,223 +1,256 @@
 # One ERP Kernel
 
-> A full ERP platform kernel—not a set of CRUD microservices—designed to support healthcare modules, future industry verticals, third-party marketplace extensions, and custom development inside a governed, multi-tenant runtime.
+> A full ERP platform kernel — not a set of CRUD microservices — designed to act as the **core operating system for enterprise applications**. Built on Spring Boot 3 + Java 21.
 
 ---
 
 ## System Overview
 
-The One ERP Kernel is the foundational layer of a platform-first ERP system. It provides the metadata-driven data dictionary (DDIC), tenant-isolated security context, and extension APIs on which all application modules are built.
+The One ERP Kernel is the foundational layer of a platform-first enterprise system. It is closer in nature to SAP NetWeaver, Oracle ERP, or ServiceNow than a typical Spring Boot application.
 
-The kernel is composed of three Gradle subprojects:
+Every action passes through **Licensing → Authorization → Policy → Audit**. Data is not just stored — it is **governed**.
+
+---
+
+## Architecture
+
+```
+         Enterprise Applications
+         (built on top of the kernel)
+
+                 │
+                 ▼
+
+            ERP Kernel Layer
+    ┌──────────────────────────────┐
+    │  identity-service  :8081     │
+    │  authorization-service :8082 │
+    │  tenant-service    :8083     │
+    │  config-service    :8084     │
+    │  audit-service     :8085     │
+    └──────────────────────────────┘
+
+                 │
+                 ▼
+
+       Platform Infrastructure
+    ┌──────────────────────────────┐
+    │  PostgreSQL (multi-schema)   │
+    │  Redis (caching)             │
+    └──────────────────────────────┘
+```
+
+All requests enter through the **cloud-gateway** (port 8080).
+
+---
+
+## Module Structure
+
+### Shared Libraries (not deployable)
 
 | Module | Responsibility |
 |---|---|
-| **kernel-api** | Defines the extension contracts: `ExtensionPoint`, `ExtensionRegistry`, `KernelModule`, `AuditableAction`, and the `@ZNamespace` annotation. |
-| **kernel-auth** | Provides multi-tenant security: `TenantContext` (thread-local tenant ID), `TenantFilter` (HTTP header enforcement), `TenantAware` (JPA `@MappedSuperclass`), `TenantInterceptor` (AOP guard), RBAC authority model, and Spring Security configuration. |
-| **kernel-metadata** | Implements the SAP-inspired Data Dictionary: `DdicDomain`, `DdicDataElement`, `DdicTable`, `DdicTableField`, and their Spring Data JPA repositories. |
+| **kernel-api** | Extension contracts: `ExtensionPoint`, `ExtensionRegistry`, `KernelModule`, `AuditableAction`, `@ZNamespace`, `ApiResponse`, `KernelEvent` |
+| **kernel-auth** | Multi-tenant security: `TenantContext`, `TenantFilter`, `TenantAware`, `BaseEntity`, `KernelAuditorAware`, `SecurityConfig`, `JwtTenantConverter`, RBAC authority model |
+| **kernel-metadata** | SAP-inspired Data Dictionary (DDIC): `DdicDomain`, `DdicDataElement`, `DdicTable`, `DdicTableField` |
 
-Applications are built **on top of** this kernel. Every action passes through **Licensing → Authorization → Policy → Audit**; data is not just stored—it is **governed**.
+### Kernel Microservices (deployable)
 
----
-
-## Technical Architecture
-
-The diagram below shows how the three modules relate to each other and to the PostgreSQL database.
-
-```mermaid
-classDiagram
-    direction LR
-
-    class kernel_api {
-        <<module>>
-        +ExtensionPoint
-        +ExtensionRegistry
-        +KernelModule
-        +AuditableAction
-        +@ZNamespace
-    }
-
-    class kernel_auth {
-        <<module>>
-        +TenantContext
-        +TenantFilter
-        +TenantAware
-        +TenantInterceptor
-        +SecurityConfig
-        +RbacAuthority
-        +Role
-    }
-
-    class kernel_metadata {
-        <<module>>
-        +DdicDomain
-        +DdicDataElement
-        +DdicTable
-        +DdicTableField
-        +MetadataAutoConfiguration
-    }
-
-    class PostgreSQL {
-        <<database>>
-        ddic_domain
-        ddic_data_element
-        ddic_table
-        ddic_table_field
-    }
-
-    kernel_auth --> kernel_api : depends on
-    kernel_metadata --> kernel_api : depends on
-    kernel_metadata --> kernel_auth : depends on
-    kernel_metadata --> PostgreSQL : JPA / Flyway
-    kernel_auth ..> PostgreSQL : tenant_id column (RLS)
-```
+| Service | Port | Responsibility |
+|---|---|---|
+| **cloud-gateway** | 8080 | API gateway — routes, JWT validation, tenant header propagation |
+| **identity-service** | 8081 | User authentication, JWT issuance, BCrypt passwords, refresh tokens |
+| **authorization-service** | 8082 | RBAC — roles, permissions, user-role and role-permission assignments |
+| **tenant-service** | 8083 | Tenant lifecycle management — create, suspend, activate |
+| **config-service** | 8084 | Dynamic configuration and feature flags, Redis-cached |
+| **audit-service** | 8085 | Immutable audit log recording and querying |
 
 ---
 
-## The DDIC Concept
+## Technology Stack
 
-Inspired by SAP's Data Dictionary, the kernel-metadata module implements a three-level hierarchy that separates **semantic meaning** from **physical storage**:
-
-```
-Domain  ──►  Data Element  ──►  Table Field
-```
-
-### Domain (`DdicDomain`)
-
-A Domain defines a **reusable value type**: its underlying data type, length, and decimal places. For example, a domain `AMOUNT` might specify `DECIMAL(15,2)`. Domains are the single source of truth for how a value is technically represented.
-
-### Data Element (`DdicDataElement`)
-
-A Data Element attaches **business semantics** to a domain. It adds a field label and a description that drive UI rendering and documentation. For example, the data element `INVOICE_TOTAL` references the `AMOUNT` domain and carries the label *"Invoice Total"*.
-
-### Table & Table Field (`DdicTable` / `DdicTableField`)
-
-A `DdicTable` represents a governed database table. Each `DdicTableField` within the table references a `DdicDataElement`, inheriting both the technical type from the domain and the business label from the data element. This means:
-
-* Changing a domain's data type propagates consistently to every table that uses it.
-* Changing a data element's label updates every UI form that renders the field.
-
-All DDIC entities extend `TenantAware`, ensuring every row is scoped to a specific tenant.
-
----
-
-## Multi-Tenancy
-
-Tenant isolation is enforced at multiple layers so that a single deployment can safely serve many organizations.
-
-### 1. HTTP Layer — `TenantFilter`
-
-Every inbound request must include an `X-Tenant-ID` header. The `TenantFilter` servlet filter rejects requests without it (HTTP 400) and stores the value in `TenantContext` for the duration of the request.
-
-### 2. Thread Context — `TenantContext`
-
-`TenantContext` uses an `InheritableThreadLocal` to carry the tenant ID through the call stack, including into child threads spawned during the request.
-
-### 3. JPA Persistence — `TenantAware`
-
-All persistent entities extend `TenantAware`, a `@MappedSuperclass` that adds a non-nullable `tenant_id` column. A `@PrePersist` callback automatically populates it from `TenantContext`, guaranteeing that rows are always stamped.
-
-### 4. AOP Guard — `TenantInterceptor`
-
-An `@Around` aspect intercepts every `find*` method in the `com.onehealth.kernel` package and throws an `IllegalStateException` if no tenant context is set, preventing accidental cross-tenant data leaks.
-
-### 5. Database — Row-Level Security (RLS)
-
-At the PostgreSQL level, Row-Level Security policies can further restrict visibility, ensuring isolation even if application-layer checks are bypassed.
-
----
-
-## Developer Guide — Adding a Z-Extension
-
-The kernel follows a **Clean Core** philosophy: core tables and logic are never modified directly. Custom functionality is added through **Z-namespace extensions**.
-
-### Step 1 — Create the Extension Class
-
-Implement the `ExtensionPoint` marker interface and annotate the class with `@ZNamespace`:
-
-```java
-package com.customer.zhospital;
-
-import com.onehealth.kernel.api.ExtensionPoint;
-import com.onehealth.kernel.api.ZNamespace;
-
-@ZNamespace("Z_HOSPITAL")
-public class ZHospitalDischargeRule implements ExtensionPoint {
-
-    public boolean canDischarge(String patientId) {
-        // custom discharge logic
-        return true;
-    }
-}
-```
-
-### Step 2 — Register the Extension
-
-Use the `ExtensionRegistry` to register your extension at module startup:
-
-```java
-package com.customer.zhospital;
-
-import com.onehealth.kernel.api.KernelModule;
-import com.onehealth.kernel.api.ExtensionRegistry;
-
-public class ZHospitalModule implements KernelModule {
-
-    private final ExtensionRegistry registry;
-
-    public ZHospitalModule(ExtensionRegistry registry) {
-        this.registry = registry;
-    }
-
-    @Override public String getModuleId()   { return "Z_HOSPITAL"; }
-    @Override public String getModuleName() { return "Z Hospital Extensions"; }
-    @Override public String getVersion()    { return "1.0.0"; }
-
-    @Override
-    public void initialize() {
-        registry.registerExtension(
-            "Z_HOSPITAL",
-            "DischargeRule",
-            new ZHospitalDischargeRule()
-        );
-    }
-}
-```
-
-### Step 3 — Consume the Extension
-
-Retrieve the extension from the registry wherever it is needed:
-
-```java
-ZHospitalDischargeRule rule = registry.getExtension(
-    "Z_HOSPITAL",
-    "DischargeRule",
-    ZHospitalDischargeRule.class
-);
-
-if (rule.canDischarge(patientId)) {
-    // proceed with discharge
-}
-```
-
-### Conventions
-
-| Convention | Rule |
+| Concern | Technology |
 |---|---|
-| **Namespace prefix** | All custom artifacts must begin with `Z_` (e.g., `Z_HOSPITAL`). |
-| **No core modification** | Never alter classes or tables outside your `Z_` namespace. |
-| **Auditable** | Extensions participate in the same audit trail as core actions via `AuditableAction`. |
-| **Tenant-scoped** | Custom entities must extend `TenantAware` to inherit tenant isolation. |
+| Language | Java 21 |
+| Framework | Spring Boot 3.3 |
+| Build | Gradle |
+| ORM | Spring Data JPA + Flyway |
+| Database | PostgreSQL (multi-schema) |
+| Cache | Redis |
+| Security | Spring Security + JWT (RS256) |
+| Password Hashing | BCrypt |
+| API Docs | OpenAPI / Swagger (springdoc) |
+| Testing | JUnit 5 + Testcontainers |
+| Containerization | Docker + Docker Compose |
 
 ---
 
-## Building the Project
+## Database Architecture
+
+Single PostgreSQL instance with multiple schemas — one per service:
+
+```
+erp_kernel database
+├── kernel_identity        (users, refresh_tokens)
+├── kernel_authorization   (roles, permissions, role_permissions, user_roles)
+├── kernel_tenant          (tenants)
+├── kernel_config          (config_entries)
+└── kernel_audit           (audit_logs)
+```
+
+---
+
+## Base Entity
+
+All entities extend `BaseEntity` (via `TenantAware`), which provides:
+
+```
+id           UUID, primary key, auto-generated
+tenant_id    VARCHAR, non-null, enforced by TenantFilter
+created_at   TIMESTAMPTZ, set by Spring Data auditing
+updated_at   TIMESTAMPTZ, set by Spring Data auditing
+created_by   VARCHAR, set from SecurityContext
+updated_by   VARCHAR, set from SecurityContext
+deleted_at   TIMESTAMPTZ, soft-delete support
+```
+
+---
+
+## Security
+
+- **Stateless JWT authentication** using RS256 signed tokens
+- **Short-lived access tokens** (15 minutes by default)
+- **Refresh tokens** stored as SHA-256 hashes
+- **BCrypt password hashing**
+- **Multi-tenant isolation** enforced at HTTP (TenantFilter), JPA (TenantAware), and DB (RLS) layers
+- **RBAC** with fine-grained permissions: `resource + action` model
+- **Immutable audit logs** — protected at both application and DB rule level
+
+---
+
+## API Design
+
+All endpoints follow REST conventions with the standard response envelope:
+
+```json
+{
+  "status": "success",
+  "data": { ... },
+  "error": null,
+  "timestamp": "2026-03-06T12:00:00Z"
+}
+```
+
+### Identity Service
+```
+POST /api/auth/register     Register a new user
+POST /api/auth/login        Authenticate and obtain tokens
+POST /api/auth/refresh      Refresh access token
+POST /api/auth/logout       Revoke refresh tokens
+POST /api/auth/change-password
+GET  /api/auth/me           Current user profile
+```
+
+### Authorization Service
+```
+POST   /api/roles                          Create role
+GET    /api/roles                          List roles
+GET    /api/roles/{id}                     Get role
+DELETE /api/roles/{id}                     Delete role
+POST   /api/roles/{id}/permissions/{pid}   Grant permission
+DELETE /api/roles/{id}/permissions/{pid}   Revoke permission
+
+POST   /api/permissions                    Create permission
+GET    /api/permissions                    List permissions
+```
+
+### Tenant Service
+```
+POST /api/tenants             Create tenant
+GET  /api/tenants             List tenants
+GET  /api/tenants/{id}        Get tenant
+GET  /api/tenants/code/{code} Get tenant by code
+POST /api/tenants/{id}/suspend
+POST /api/tenants/{id}/activate
+```
+
+### Config Service
+```
+PUT  /api/config              Set or update config
+GET  /api/config              List all config
+GET  /api/config/value/{key}  Get value by key
+GET  /api/config/feature-flags
+DELETE /api/config/{id}
+```
+
+### Audit Service
+```
+POST /api/audit                   Record audit event
+GET  /api/audit                   List audit logs (paginated)
+GET  /api/audit/action/{type}     Filter by action type
+GET  /api/audit/user/{username}   Filter by user
+GET  /api/audit/range?from=&to=   Filter by date range
+```
+
+---
+
+## Quick Start (Development)
+
+### Prerequisites
+
+- Java 21
+- Docker + Docker Compose
+
+### Run with Docker Compose
 
 ```bash
-# Requires Java 17+
+# Build all services
+./gradlew build -x test
+
+# Start the full stack
+docker-compose up -d
+
+# Services will be available at:
+#   Gateway:       http://localhost:8080
+#   Identity:      http://localhost:8081/swagger-ui.html
+#   Authorization: http://localhost:8082/swagger-ui.html
+#   Tenant:        http://localhost:8083/swagger-ui.html
+#   Config:        http://localhost:8084/swagger-ui.html
+#   Audit:         http://localhost:8085/swagger-ui.html
+```
+
+### Build
+
+```bash
+# Requires Java 21+
 ./gradlew build
 ```
 
+### Run Tests
+
+```bash
+./gradlew test
+```
+
+---
+
+## Extensibility — Z-Namespace Extensions
+
+The kernel follows a **Clean Core** philosophy: core code is never modified directly.
+
+Custom functionality is added through **Z-namespace extensions**:
+
+```java
+@ZNamespace("Z_HOSPITAL")
+public class ZHospitalDischargeRule implements ExtensionPoint {
+    public boolean canDischarge(String patientId) { ... }
+}
+```
+
+See the `kernel-api` module for `ExtensionPoint`, `ExtensionRegistry`, and `@ZNamespace`.
+
+---
+
 ## License
 
-See [spec.md](spec.md) for the full system specification.
+See [ERP_KERNEL_SYSTEM_PROMPT.md](ERP_KERNEL_SYSTEM_PROMPT.md) and [spec.md](spec.md) for the full system specification.
