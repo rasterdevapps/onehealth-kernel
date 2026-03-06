@@ -31,9 +31,8 @@ public class GatewaySecurityConfig {
                 // do not automatically attach the Authorization header to cross-site requests.
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .authorizeExchange(auth -> auth
-                        .pathMatchers("/auth/token").permitAll()
+                        .pathMatchers("/api/auth/login", "/api/auth/register", "/api/auth/refresh").permitAll()
                         .pathMatchers("/actuator/**").permitAll()
-                        .pathMatchers("/ws/**").permitAll()
                         .anyExchange().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtDecoder(reactiveJwtDecoder())));

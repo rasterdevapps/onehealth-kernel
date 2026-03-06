@@ -12,22 +12,26 @@ spring:
   cloud:
     gateway:
       routes:
-        - id: service-his
-          uri: ${HIS_URI:http://localhost:8081}
+        - id: identity-service
+          uri: ${IDENTITY_URI:http://localhost:8081}
           predicates:
-            - Path=/api/patients/**
-        - id: service-emr
-          uri: ${EMR_URI:http://localhost:8082}
+            - Path=/api/auth/**
+        - id: authorization-service
+          uri: ${AUTHORIZATION_URI:http://localhost:8082}
           predicates:
-            - Path=/api/encounters/**
-        - id: service-lis
-          uri: ${LIS_URI:http://localhost:8083}
+            - Path=/api/roles/**, /api/permissions/**
+        - id: tenant-service
+          uri: ${TENANT_URI:http://localhost:8083}
           predicates:
-            - Path=/api/lab-orders/**
-        - id: service-emr-ws
-          uri: ${EMR_WS_URI:ws://localhost:8082}
+            - Path=/api/tenants/**
+        - id: config-service
+          uri: ${CONFIG_URI:http://localhost:8084}
           predicates:
-            - Path=/ws/**
+            - Path=/api/config/**
+        - id: audit-service
+          uri: ${AUDIT_URI:http://localhost:8085}
+          predicates:
+            - Path=/api/audit/**
       default-filters:
         - PreserveHostHeader
 

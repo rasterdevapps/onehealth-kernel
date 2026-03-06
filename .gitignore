@@ -16,9 +16,3 @@ bin/
 .DS_Store
 *.log
 hs_err_pid*
-
-# Angular
-onehealth-ui/node_modules/
-onehealth-ui/dist/
-onehealth-ui/.angular/
-onehealth-ui/.vscode/
